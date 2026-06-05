@@ -20,18 +20,30 @@ class TokenUsageError(Exception):
     pass
 
 
-GRADING_PROMPT_TEMPLATE = """You are an expert evaluator. Compare the golden answer to the actual response and provide a score.
+GRADING_PROMPT_TEMPLATE = """You are an expert evaluator. Compare the golden answer to the actual response and provide a numerical score.
 
+OUTPUT FORMAT (you must follow this exactly):
+End your response with a line containing only: Score: X.XX
+Where X.XX is a decimal between 0 and 1 (e.g., "Score: 0.85")
+Nothing should appear after the score line.
+
+EVALUATION TASK:
 Prompt: {prompt}
 
 Golden Answer: {golden_answer}
 
-Evaluate the accuracy and completeness of the response. Provide a score from 0 to 1 where:
-- 0 = completely wrong or missing
-- 0.5 = partially correct
-- 1 = completely correct and complete
+Evaluate the accuracy and completeness of the response. Consider:
+- Factual correctness of all key points
+- Completeness (are all important details present?)
+- Format alignment (does the output match the expected structure/format?)
+- Usefulness (is the output in the right form for the intended use?)
 
-End your response with: Score: X.XX (e.g., Score: 0.85)"""
+Use this scale:
+- 0 = completely wrong, missing, or completely misformatted
+- 0.25 = mostly wrong or significant missing content
+- 0.5 = partially correct or partially complete
+- 0.75 = mostly correct with minor issues
+- 1 = completely correct and complete"""
 
 
 def score_with_agent_binary(agent_path: str, prompt: str) -> Tuple[float, int]:
@@ -75,7 +87,10 @@ def score_with_agent_binary(agent_path: str, prompt: str) -> Tuple[float, int]:
 def _parse_agent_binary_output(output: str) -> float:
     """Parse score from agent binary output.
 
-    Tries JSON parsing first (looking for 'score' field), then falls back to float parsing.
+    Tries multiple parsing strategies:
+    1. JSON with 'score' field
+    2. Pattern "Score: X.XX" (case-insensitive)
+    3. Plain float number
 
     Args:
         output: Raw output from agent binary.
@@ -113,9 +128,21 @@ def _parse_agent_binary_output(output: str) -> float:
                 f"Agent binary returned invalid JSON: {output}"
             ) from e
 
-    # Fall back to float parsing
+    # Try pattern matching for "Score: X.XX" in verbose output
+    match = re.search(r'Score:\s*([\d.]+)', output, re.IGNORECASE)
+    if match:
+        try:
+            score = float(match.group(1))
+            _validate_score(score)
+            return score
+        except ValueError as e:
+            raise ScoreExtractionError(
+                f"Score is not a valid number: {match.group(1)}"
+            ) from e
+
+    # Fall back to plain float parsing
     try:
-        score = float(output)
+        score = float(output.strip())
     except ValueError as e:
         raise ScoreExtractionError(
             f"Agent binary returned invalid score: {output}"

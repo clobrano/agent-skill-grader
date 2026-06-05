@@ -464,3 +464,47 @@ class TestAgentBinaryScoring:
 
             assert tokens == 35
             assert tokens > 0
+
+    def test_score_with_agent_binary_verbose_output_with_score_pattern(self):
+        """Agent binary verbose output with 'Score: X.XX' at end is parsed."""
+        verbose_output = """Now I'll compare the actual response against the golden answer.
+
+Analysis of key points:
+- Point 1: Present and correct
+- Point 2: Partially addressed
+- Point 3: Missing some detail
+
+Score: 0.25"""
+        with patch('grader.claude_scorer.subprocess.run') as mock_run:
+            mock_run.return_value = Mock(
+                returncode=0,
+                stdout=verbose_output,
+                stderr=""
+            )
+
+            from grader.claude_scorer import score_with_agent_binary
+            score, tokens = score_with_agent_binary("/path/to/agent", "prompt")
+
+            assert score == 0.25
+            assert tokens == 0
+
+    def test_score_with_agent_binary_verbose_output_case_insensitive(self):
+        """Score pattern matching is case-insensitive."""
+        test_cases = [
+            ("Final SCORE: 0.6", 0.6),
+            ("Result score: 0.7", 0.7),
+            ("SCORE: 0.8", 0.8),
+            ("score: 0.9", 0.9),
+        ]
+        for output, expected_score in test_cases:
+            with patch('grader.claude_scorer.subprocess.run') as mock_run:
+                mock_run.return_value = Mock(
+                    returncode=0,
+                    stdout=output,
+                    stderr=""
+                )
+
+                from grader.claude_scorer import score_with_agent_binary
+                score, tokens = score_with_agent_binary("/path/to/agent", "prompt")
+
+                assert score == expected_score
