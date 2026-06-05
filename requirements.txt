@@ -1,0 +1,4 @@
+anthropic[vertex]>=0.25.0
+ruamel.yaml>=0.18.0
+pytest>=7.0.0
+pytest-mock>=3.0.0

@@ -1,0 +1,21 @@
+items:
+  - prompt: "What is the capital of France?"
+    golden_answer: "Paris"
+    score: 0
+    tokens: 0
+  - prompt: "What is the largest planet in our solar system?"
+    golden_answer: "Jupiter"
+    score: 0
+    tokens: 0
+  - prompt: "Who wrote Romeo and Juliet?"
+    golden_answer: "William Shakespeare"
+    score: 0.7
+    tokens: 150
+  - prompt: "What is the chemical symbol for gold?"
+    golden_answer: "Au"
+    score: 0.95
+    tokens: 120
+  - prompt: "Name the smallest prime number."
+    golden_answer: "2"
+    score: 0
+    tokens: 0

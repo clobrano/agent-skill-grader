@@ -1,0 +1,1 @@
+- [Agent Skill Grader Project Summary](tdd-python-developer/project-summary.md) — Complete TDD implementation: 138 tests, 11 modules, Phases 1-3 done
