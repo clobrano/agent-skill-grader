@@ -18,6 +18,16 @@ Score an evaluation YAML file with default settings:
 python main.py path/to/evaluation.yaml
 ```
 
+### With Custom Agent Binary
+
+Use your own agent binary (no API key needed):
+
+```bash
+python main.py path/to/evaluation.yaml
+```
+
+(Configure `agent_binary: "/path/to/agent"` in the YAML file)
+
 ### With Custom Model
 
 Use a different Claude model:
@@ -25,6 +35,15 @@ Use a different Claude model:
 ```bash
 python main.py path/to/evaluation.yaml --model claude-3-opus-20250729
 ```
+
+Or configure in YAML:
+```yaml
+model: "claude-3-opus-20250729"
+items:
+  - ...
+```
+
+CLI `--model` flag overrides YAML config.
 
 ### Verbosity Control
 
@@ -37,18 +56,22 @@ python main.py path/to/evaluation.yaml --verbosity quiet
 # Normal: summary statistics (default)
 python main.py path/to/evaluation.yaml --verbosity normal
 
-# Verbose: per-item updates
+# Verbose: per-item updates and improvements
 python main.py path/to/evaluation.yaml --verbosity verbose
 
-# Debug: all details including prompts
+# Debug: all details including prompts and agent responses
 python main.py path/to/evaluation.yaml --verbosity debug
 ```
 
 ## YAML Format
 
-Evaluation files must contain a list of items with the following structure:
+Evaluation files must contain a list of items with optional top-level configuration:
 
 ```yaml
+# Optional: Configure agent and model for all items
+agent_binary: "/path/to/agent"  # Optional: use custom agent binary instead of Anthropic API
+model: "claude-3-5-sonnet-20241022"  # Optional: Claude model to use (default: Claude 3.5 Sonnet)
+
 items:
   - prompt: "What is the capital of France?"
     golden_answer: "Paris"
@@ -60,14 +83,65 @@ items:
     tokens: 150
 ```
 
-### Field Descriptions
+### Top-Level Configuration
 
-- **prompt**: The evaluation question or prompt (string)
-- **golden_answer**: The correct/expected answer (string)
+- **agent_binary** (optional): Path to a custom agent binary to use for scoring instead of the Anthropic API
+  - When specified, the tool runs: `echo "prompt" | /path/to/agent`
+  - Agent binary output can be a plain number (0-1) or JSON with a `score` field
+  - Token tracking is disabled when using agent binary (returns 0)
+  - If not specified, falls back to Anthropic SDK (requires proper auth)
+
+- **model** (optional): Claude model to use for scoring (e.g., "claude-3-opus-20250729")
+  - Default: "claude-3-5-sonnet-20241022"
+  - Ignored if `agent_binary` is specified
+  - Can be overridden via CLI flag: `--model claude-3-5-sonnet-20241022`
+
+### Item Fields
+
+- **prompt** or **prompt_file**: The evaluation question or prompt
+  - `prompt`: Inline string (e.g., `"What is the capital of France?"`)
+  - `prompt_file`: Path to file containing the prompt (e.g., `"prompts/q1.txt"`)
+  - At least one must be provided; `prompt_file` takes precedence if both exist
+
+- **golden_answer** or **golden_answer_file**: The correct/expected answer
+  - `golden_answer`: Inline string (e.g., `"Paris"`)
+  - `golden_answer_file`: Path to file containing the answer (e.g., `"answers/a1.txt"`)
+  - At least one must be provided; `golden_answer_file` takes precedence if both exist
+
 - **score**: Current score from 0.0 to 1.0 (float)
-  - 0: Ungraded item (will be scored by Claude)
-  - 0-1: Previously graded (will be updated only if Claude's score is higher)
+  - 0: Ungraded item (will be scored by agent/Claude)
+  - 0-1: Previously graded (will be updated only if new score is higher)
+
 - **tokens**: Tokens consumed in this evaluation run (integer, 0 for ungraded items)
+
+### Complete Example
+
+```yaml
+agent_binary: "/usr/local/bin/my-agent"
+model: "claude-3-5-sonnet-20241022"
+
+items:
+  # Using custom agent binary with inline content
+  - prompt: "What is the capital of France?"
+    golden_answer: "Paris"
+    score: 0
+    tokens: 0
+
+  # Using file references with agent binary
+  - prompt_file: "prompts/question2.txt"
+    golden_answer_file: "answers/answer2.txt"
+    score: 0
+    tokens: 0
+
+  # Mixed: file prompt, inline answer
+  - prompt_file: "prompts/question3.txt"
+    golden_answer: "The expected answer"
+    score: 0.7
+    tokens: 200
+
+  # Anthropic API example (no agent_binary means use Anthropic SDK)
+  # Simply remove agent_binary field to use Anthropic
+```
 
 ## Score Update Logic
 
@@ -126,13 +200,50 @@ The tool provides clear error messages for common issues:
 - **Missing fields**: Verify all items have prompt, golden_answer, score, and tokens fields
 - **API errors**: Check your ANTHROPIC_API_KEY environment variable and network connection
 
-## Environment Variables
+## Authentication & Configuration
 
-Required:
+### Using Anthropic API (Default)
+
+Requires one of:
 - `ANTHROPIC_API_KEY`: Your Anthropic API key
+- Google Cloud Vertex AI credentials (if `CLAUDE_CODE_USE_VERTEX` and `ANTHROPIC_VERTEX_PROJECT_ID` are set)
 
-Optional:
-- None currently, but may be added for logging configuration
+Example:
+```bash
+export ANTHROPIC_API_KEY="sk-ant-..."
+python main.py evals.yaml
+```
+
+### Using Custom Agent Binary
+
+No API key required. Configure in YAML:
+
+```yaml
+agent_binary: "/path/to/agent"
+items:
+  - prompt: "..."
+    golden_answer: "..."
+    score: 0
+    tokens: 0
+```
+
+The agent binary is called as:
+```bash
+echo "prompt text" | /path/to/agent
+```
+
+Expected output: A number (0-1) or JSON with a `score` field.
+
+Example agent binary responses:
+```
+0.85
+```
+
+or
+
+```json
+{"score": 0.85, "reasoning": "..."}
+```
 
 ## Testing
 
